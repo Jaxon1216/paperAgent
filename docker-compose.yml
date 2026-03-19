@@ -1,0 +1,19 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - paper_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/paper.db
+
+volumes:
+  paper_data:
