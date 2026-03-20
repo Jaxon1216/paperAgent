@@ -26,9 +26,11 @@ interface Props {
     metadata_fields: Record<string, string>
   }) => void
   onBack: () => void
+  isLastStep?: boolean
+  loading?: boolean
 }
 
-export default function PaperInfo({ template, initialData, onSubmit, onBack }: Props) {
+export default function PaperInfo({ template, initialData, onSubmit, onBack, isLastStep, loading }: Props) {
   const [form] = Form.useForm<FormValues>()
 
   const hasCoverData = Object.values(initialData.metadata_fields).some((v) => v !== '')
@@ -137,8 +139,17 @@ export default function PaperInfo({ template, initialData, onSubmit, onBack }: P
       <Form.Item style={{ marginTop: 24 }}>
         <Space>
           <Button onClick={onBack}>上一步</Button>
-          <Button type="primary" htmlType="submit">下一步</Button>
+          <Button type="primary" htmlType="submit" loading={loading}>
+            {isLastStep ? '创建论文' : '下一步'}
+          </Button>
         </Space>
+        {isLastStep && (
+          <div style={{ marginTop: 8 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              创建后进入编辑器，点击「AI 规划」自动生成章节结构
+            </Text>
+          </div>
+        )}
       </Form.Item>
     </Form>
   )

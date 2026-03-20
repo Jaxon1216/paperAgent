@@ -28,9 +28,23 @@ class Template:
     cover_fields: list[CoverField] = field(default_factory=list)
     default_sections: list[DefaultSection] = field(default_factory=list)
     typst_template: str = ""
+    default_heading_style: str = "arabic"  # "arabic" (1. 1.1) or "chinese" (一、1. (1))
 
 
 TEMPLATES: dict[str, Template] = {
+    "ai-generated": Template(
+        id="ai-generated",
+        name="AI 智能规划",
+        description="无预设章节，创建后由 AI 根据题目要求自动规划最优章节结构",
+        language="zh",
+        cover_fields=[
+            CoverField(key="author", label="作者", placeholder="每行一个姓名", multiline=True),
+            CoverField(key="institution", label="学校/机构", placeholder="请输入学校或机构名称"),
+            CoverField(key="date", label="日期", placeholder="如 2026 年 3 月"),
+        ],
+        default_sections=[],
+        typst_template="general-academic/template.typ",
+    ),
     "math-modeling-cn": Template(
         id="math-modeling-cn",
         name="数学建模竞赛（国赛）",
@@ -105,6 +119,7 @@ TEMPLATES: dict[str, Template] = {
             ),
         ],
         typst_template="math-modeling-cn/template.typ",
+        default_heading_style="chinese",
     ),
     "general-academic": Template(
         id="general-academic",

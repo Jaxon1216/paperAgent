@@ -58,6 +58,26 @@ async def update_settings(body: LLMSettingsUpdate, db: AsyncSession = Depends(ge
     return value_dict
 
 
+@router.post("/settings/test")
+async def test_settings(db: AsyncSession = Depends(get_db)):
+    """Send a minimal request to verify the API key and model work."""
+    from app.services.llm_service import chat
+
+    try:
+        reply = await chat(
+            [{"role": "user", "content": "Hello, reply with only: OK"}],
+            db,
+        )
+        return {"ok": True, "reply": reply.strip()[:200]}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        error_msg = str(e)
+        if len(error_msg) > 300:
+            error_msg = error_msg[:300] + "..."
+        return {"ok": False, "error": error_msg}
+
+
 def mask_key(key: str) -> str:
     if not key or len(key) < 8:
         return key

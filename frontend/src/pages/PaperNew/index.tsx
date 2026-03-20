@@ -32,6 +32,8 @@ export default function PaperNew() {
   const [sections, setSections] = useState<SectionOverride[]>([])
   const [creating, setCreating] = useState(false)
 
+  const isAiTemplate = selectedTemplate && selectedTemplate.default_sections.length === 0
+
   const handleTemplateSelect = (template: Template) => {
     setSelectedTemplate(template)
     setFormData((prev) => ({ ...prev, template_id: template.id }))
@@ -47,7 +49,24 @@ export default function PaperNew() {
 
   const handleInfoSubmit = (data: Omit<PaperFormData, 'template_id'>) => {
     setFormData((prev) => ({ ...prev, ...data }))
-    setCurrent(2)
+    if (isAiTemplate) {
+      handleCreateDirect({ ...formData, ...data })
+    } else {
+      setCurrent(2)
+    }
+  }
+
+  const handleCreateDirect = async (data: PaperFormData) => {
+    setCreating(true)
+    try {
+      const paper = await createPaper({ ...data, sections: [] })
+      message.success('论文创建成功，请使用「AI 规划」生成章节')
+      navigate(`/papers/${paper.id}/edit`)
+    } catch {
+      message.error('创建失败，请重试')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleCreate = async () => {
@@ -66,11 +85,9 @@ export default function PaperNew() {
     }
   }
 
-  const steps = [
-    { title: '选择模板' },
-    { title: '填写信息' },
-    { title: '确认结构' },
-  ]
+  const steps = isAiTemplate
+    ? [{ title: '选择模板' }, { title: '填写信息' }]
+    : [{ title: '选择模板' }, { title: '填写信息' }, { title: '确认结构' }]
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '40px 24px' }}>
@@ -95,6 +112,8 @@ export default function PaperNew() {
           initialData={formData}
           onSubmit={handleInfoSubmit}
           onBack={() => setCurrent(0)}
+          isLastStep={!!isAiTemplate}
+          loading={creating}
         />
       )}
 

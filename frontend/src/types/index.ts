@@ -22,6 +22,7 @@ export interface Template {
   cover_fields: CoverField[]
   default_sections: DefaultSection[]
   typst_template: string
+  default_heading_style: 'arabic' | 'chinese'
 }
 
 export interface Section {

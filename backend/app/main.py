@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database.connection import init_db
-from app.routers import papers, sections, references, templates, settings
+from app.routers import papers, sections, references, templates, settings, ai, export
 
 
 @asynccontextmanager
@@ -28,6 +28,8 @@ app.include_router(sections.router, prefix="/api")
 app.include_router(references.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 
 @app.get("/api/health")
