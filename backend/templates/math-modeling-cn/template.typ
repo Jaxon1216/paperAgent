@@ -47,6 +47,12 @@ $else$
 })
 $endif$
 
+// Force first-line-indent on the first paragraph after headings (Chinese convention)
+#show heading: it => {
+  it
+  par(text(size: 0.35em, h(0em)))
+}
+
 #show heading.where(level: 1): it => {
   set text(size: 15pt, weight: "bold", font: ("Times New Roman", "Heiti SC", "SimHei", "Noto Sans CJK SC"))
   v(0.8em)
