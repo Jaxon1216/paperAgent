@@ -30,8 +30,10 @@ import {
   ProfileOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
+import { Progress } from 'antd'
 import type { CoverField, Paper, Section } from '@/types'
 import { useUiStore } from '@/stores/uiStore'
+import { countWords } from '@/utils/wordCount'
 import { usePaperStore } from '@/stores/paperStore'
 import { planStructure, planInstructions, streamGenerateAll } from '@/services/aiApi'
 import { fetchTemplate } from '@/services/templateApi'
@@ -80,6 +82,11 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
 
   const allConfirmed = paper.sections.length > 0 && paper.sections.every((s) => s.status === 'confirmed')
   const hasContent = paper.sections.some((s) => s.content_md?.trim())
+
+  const sectionWordCounts = paper.sections.map((s) => countWords(s.content_md))
+  const totalWords = sectionWordCounts.reduce((sum, c) => sum + c, 0)
+  const targetWords = paper.target_words || 0
+  const wordPercent = targetWords > 0 ? Math.min(Math.round((totalWords / targetWords) * 100), 100) : 0
 
   const handlePlanStructure = async () => {
     setPlanningStructure(true)
@@ -286,6 +293,30 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Word Count Stats */}
+        {paper.sections.length > 0 && (
+          <div style={{ padding: '4px 12px 0', marginBottom: -2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                字数：<Text strong style={{ fontSize: 11 }}>{totalWords.toLocaleString()}</Text>
+                {targetWords > 0 && <span> / {targetWords.toLocaleString()}</span>}
+              </Text>
+              {targetWords > 0 && (
+                <Text type="secondary" style={{ fontSize: 11 }}>{wordPercent}%</Text>
+              )}
+            </div>
+            {targetWords > 0 && (
+              <Progress
+                percent={wordPercent}
+                size="small"
+                showInfo={false}
+                strokeColor={wordPercent >= 100 ? '#52c41a' : '#1677ff'}
+                style={{ margin: 0 }}
+              />
+            )}
+          </div>
+        )}
+
         {/* Section List */}
         <div style={{ padding: '0 0 4px' }}>
           <div style={{ padding: '4px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -297,71 +328,77 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
               <Text type="secondary" style={{ fontSize: 12 }}>暂无章节，点击「① 章节规划」或手动添加</Text>
             </div>
           )}
-          {paper.sections.map((section) => (
-            <div
-              key={section.id}
-              draggable={!isBusy}
-              onDragStart={() => handleDragStart(section)}
-              onDragOver={(e) => handleDragOver(e, section.id)}
-              onDragLeave={() => setDragOverId(null)}
-              onDrop={() => handleDrop(section)}
-              onClick={() => onSelect(section.id)}
-              style={{
-                padding: '6px 12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background:
-                  generatingSectionId === section.id
-                    ? '#fff7e6'
-                    : section.id === activeSectionId
-                      ? '#e6f4ff'
-                      : 'transparent',
-                borderLeft:
-                  section.id === activeSectionId
-                    ? '3px solid #1677ff'
-                    : '3px solid transparent',
-                borderTop:
-                  dragOverId === section.id
-                    ? '2px solid #1677ff'
-                    : '2px solid transparent',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                if (section.id !== activeSectionId && generatingSectionId !== section.id)
-                  e.currentTarget.style.background = '#f0f0f0'
-              }}
-              onMouseLeave={(e) => {
-                if (section.id !== activeSectionId && generatingSectionId !== section.id)
-                  e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              {getSectionIcon(section)}
-              <Text ellipsis style={{ flex: 1, fontSize: 13 }}>{section.title}</Text>
-              {section.ai_instruction && (
-                <Tooltip title="已有写作指令">
-                  <BulbOutlined style={{ color: '#faad14', fontSize: 11 }} />
-                </Tooltip>
-              )}
-              {!isBusy && (
-                <Popconfirm
-                  title="删除此章节？"
-                  onConfirm={(e) => { e?.stopPropagation(); handleDeleteSection(section.id) }}
-                  onCancel={(e) => e?.stopPropagation()}
-                  okText="删除"
-                  cancelText="取消"
-                >
-                  <DeleteOutlined
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ color: '#bfbfbf', fontSize: 12 }}
-                    onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#ff4d4f' }}
-                    onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#bfbfbf' }}
-                  />
-                </Popconfirm>
-              )}
-            </div>
-          ))}
+          {paper.sections.map((section, idx) => {
+            const wc = sectionWordCounts[idx]
+            return (
+              <div
+                key={section.id}
+                draggable={!isBusy}
+                onDragStart={() => handleDragStart(section)}
+                onDragOver={(e) => handleDragOver(e, section.id)}
+                onDragLeave={() => setDragOverId(null)}
+                onDrop={() => handleDrop(section)}
+                onClick={() => onSelect(section.id)}
+                style={{
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background:
+                    generatingSectionId === section.id
+                      ? '#fff7e6'
+                      : section.id === activeSectionId
+                        ? '#e6f4ff'
+                        : 'transparent',
+                  borderLeft:
+                    section.id === activeSectionId
+                      ? '3px solid #1677ff'
+                      : '3px solid transparent',
+                  borderTop:
+                    dragOverId === section.id
+                      ? '2px solid #1677ff'
+                      : '2px solid transparent',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (section.id !== activeSectionId && generatingSectionId !== section.id)
+                    e.currentTarget.style.background = '#f0f0f0'
+                }}
+                onMouseLeave={(e) => {
+                  if (section.id !== activeSectionId && generatingSectionId !== section.id)
+                    e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {getSectionIcon(section)}
+                <Text ellipsis style={{ flex: 1, fontSize: 13 }}>{section.title}</Text>
+                {wc > 0 && (
+                  <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>{wc.toLocaleString()}</Text>
+                )}
+                {section.ai_instruction && (
+                  <Tooltip title="已有写作指令">
+                    <BulbOutlined style={{ color: '#faad14', fontSize: 11 }} />
+                  </Tooltip>
+                )}
+                {!isBusy && (
+                  <Popconfirm
+                    title="删除此章节？"
+                    onConfirm={(e) => { e?.stopPropagation(); handleDeleteSection(section.id) }}
+                    onCancel={(e) => e?.stopPropagation()}
+                    okText="删除"
+                    cancelText="取消"
+                  >
+                    <DeleteOutlined
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ color: '#bfbfbf', fontSize: 12 }}
+                      onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#ff4d4f' }}
+                      onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#bfbfbf' }}
+                    />
+                  </Popconfirm>
+                )}
+              </div>
+            )
+          })}
           <div style={{ padding: '6px 12px', display: 'flex', gap: 4 }}>
             <Input
               size="small"
