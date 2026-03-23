@@ -35,7 +35,7 @@ import type { CoverField, Paper, Section } from '@/types'
 import { useUiStore } from '@/stores/uiStore'
 import { countWords } from '@/utils/wordCount'
 import { usePaperStore } from '@/stores/paperStore'
-import { planStructure, planInstructions, streamGenerateAll } from '@/services/aiApi'
+import { planStructure, planInstructions, streamGenerateAll, extractKeywords } from '@/services/aiApi'
 import { fetchTemplate } from '@/services/templateApi'
 
 const { Text } = Typography
@@ -67,6 +67,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
   const [generatingSectionId, setGeneratingSectionId] = useState<string | null>(null)
   const [newSectionTitle, setNewSectionTitle] = useState('')
   const [refKeywords, setRefKeywords] = useState(paper.metadata_fields?.['_ai_reference_keywords'] || '')
+  const [extractingKeywords, setExtractingKeywords] = useState(false)
   const [coverFields, setCoverFields] = useState<CoverField[]>([])
   const dragItemRef = useRef<Section | null>(null)
   const abortRef = useRef<(() => void) | null>(null)
@@ -82,6 +83,8 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
 
   const allConfirmed = paper.sections.length > 0 && paper.sections.every((s) => s.status === 'confirmed')
   const hasContent = paper.sections.some((s) => s.content_md?.trim())
+  const hasEmptySections = paper.sections.some((s) => !s.content_md?.trim() || s.status === 'empty')
+  const isResumeMode = hasContent && hasEmptySections
 
   const sectionWordCounts = paper.sections.map((s) => countWords(s.content_md))
   const totalWords = sectionWordCounts.reduce((sum, c) => sum + c, 0)
@@ -246,6 +249,19 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
     }, 800)
   }
 
+  const handleExtractKeywords = async () => {
+    setExtractingKeywords(true)
+    try {
+      const { keywords } = await extractKeywords(paper.id)
+      setRefKeywords(keywords)
+      message.success('关键词提取完成')
+    } catch (e: unknown) {
+      message.error((e as Error).message || '关键词提取失败')
+    } finally {
+      setExtractingKeywords(false)
+    }
+  }
+
   const getSectionIcon = (section: Section) => {
     if (generatingSectionId === section.id) return <LoadingOutlined style={{ color: '#faad14', fontSize: 14 }} />
     return STATUS_ICON[section.status] ?? STATUS_ICON.empty
@@ -302,7 +318,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
           <Button icon={<PauseCircleOutlined />} danger onClick={handleStopAll} block size="small">停止生成</Button>
         ) : (
           <Button icon={<ThunderboltOutlined />} type="primary" onClick={handleGenerateAll} disabled={isBusy} block size="small">
-            ③ 开始生成
+            {isResumeMode ? '③ 继续生成' : '③ 开始生成'}
           </Button>
         )}
       </div>
@@ -479,29 +495,58 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
                 </div>
               ),
             },
-            ...(refKeywords ? [{
+            {
               key: 'keywords',
               label: <Text style={{ fontSize: 12, fontWeight: 600 }}>AI 关键词建议</Text>,
               children: (
                 <div style={{ padding: '0 4px' }}>
-                  <Input.TextArea
-                    value={refKeywords}
-                    readOnly
-                    autoSize={{ minRows: 2, maxRows: 10 }}
-                    style={{ fontSize: 11, background: '#fff' }}
-                  />
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={() => { navigator.clipboard.writeText(refKeywords); message.success('已复制') }}
-                    style={{ padding: '4px 0', fontSize: 11 }}
-                  >
-                    复制关键词
-                  </Button>
+                  {refKeywords ? (
+                    <>
+                      <Input.TextArea
+                        value={refKeywords}
+                        readOnly
+                        autoSize={{ minRows: 2, maxRows: 10 }}
+                        style={{ fontSize: 11, background: '#fff' }}
+                      />
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => { navigator.clipboard.writeText(refKeywords); message.success('已复制') }}
+                          style={{ padding: '4px 0', fontSize: 11 }}
+                        >
+                          复制关键词
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<BulbOutlined />}
+                          loading={extractingKeywords}
+                          onClick={handleExtractKeywords}
+                          disabled={!hasContent}
+                          style={{ padding: '4px 0', fontSize: 11 }}
+                        >
+                          重新提取
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <Button
+                      size="small"
+                      icon={<BulbOutlined />}
+                      loading={extractingKeywords}
+                      onClick={handleExtractKeywords}
+                      disabled={!hasContent}
+                      block
+                      style={{ fontSize: 11 }}
+                    >
+                      {extractingKeywords ? '提取中...' : '提取关键词'}
+                    </Button>
+                  )}
                 </div>
               ),
-            }] : []),
+            },
             {
               key: 'requirements',
               label: <Text style={{ fontSize: 12, fontWeight: 600 }}>论文要求</Text>,

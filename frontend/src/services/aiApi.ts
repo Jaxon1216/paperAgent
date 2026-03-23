@@ -127,6 +127,19 @@ export function streamGenerateAll(paperId: string) {
   return sseRequest(`/api/papers/${paperId}/generate-all`)
 }
 
+export async function extractKeywords(paperId: string): Promise<{ keywords: string }> {
+  const base = import.meta.env.DEV ? 'http://localhost:8000' : ''
+  const res = await fetch(`${base}/api/papers/${paperId}/extract-keywords`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || '关键词提取失败')
+  }
+  return res.json()
+}
+
 export function streamChat(
   paperId: string,
   sectionId: string,

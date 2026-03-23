@@ -392,7 +392,7 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
 
         try:
             for section in gen_order:
-                if section.status == "confirmed":
+                if section.status in ("confirmed", "draft") and section.content_md:
                     generated_contents[section.title] = section.content_md or ""
                     continue
 
@@ -469,7 +469,7 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
                     )
                     keywords_text = await chat(kw_messages, db)
 
-                    meta = paper.metadata_fields or {}
+                    meta = dict(paper.metadata_fields or {})
                     meta["_ai_reference_keywords"] = keywords_text
                     paper.metadata_fields = meta
                     paper.updated_at = datetime.now(timezone.utc)
@@ -487,6 +487,45 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
             yield _sse("error", {"message": str(e)})
 
     return _sse_response(event_stream())
+
+
+@router.post("/papers/{paper_id}/extract-keywords")
+async def extract_keywords(paper_id: str, db: AsyncSession = Depends(get_db)):
+    """Extract reference search keywords from existing paper content."""
+    result = await db.execute(
+        select(Paper)
+        .options(selectinload(Paper.sections))
+        .where(Paper.id == paper_id)
+    )
+    paper = result.scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    sections = sorted(paper.sections, key=lambda s: s.order)
+    contents = {
+        s.title: s.content_md
+        for s in sections if s.content_md and s.content_md.strip()
+    }
+    if not contents:
+        raise HTTPException(status_code=400, detail="论文暂无内容，请先生成章节")
+
+    compressed = "\n\n".join(
+        _compress_section(t, c, 200) for t, c in contents.items()
+    )
+    kw_messages = build_keyword_messages(
+        title=paper.title,
+        requirements=paper.requirements or "",
+        compressed_content=compressed,
+    )
+    keywords_text = await chat(kw_messages, db)
+
+    meta = dict(paper.metadata_fields or {})
+    meta["_ai_reference_keywords"] = keywords_text
+    paper.metadata_fields = meta
+    paper.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"keywords": keywords_text}
 
 
 @router.post("/papers/{paper_id}/chat")
