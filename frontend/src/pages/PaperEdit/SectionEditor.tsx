@@ -16,6 +16,7 @@ import {
 import MDEditor from '@uiw/react-md-editor'
 import type { Section } from '@/types'
 import { usePaperStore } from '@/stores/paperStore'
+import { countWords } from '@/utils/wordCount'
 import { streamGenerateSection, streamPolishSection } from '@/services/aiApi'
 import PolishModal from './PolishModal'
 
@@ -467,6 +468,24 @@ export default function SectionEditor({ section }: Props) {
           hideToolbar={isLocked}
           style={{ border: 'none', borderRadius: 0 }}
         />
+      </div>
+
+      <div
+        style={{
+          padding: '5px 20px',
+          borderTop: '1px solid #E4E9F0',
+          background: '#F7F8FA',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          fontSize: 11,
+          color: '#8694A0',
+          userSelect: 'none',
+        }}
+      >
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{countWords(localContent).toLocaleString()} 字</span>
+        <span>{isLocked ? '已锁定' : isBusy ? '生成中...' : '编辑中'}</span>
       </div>
 
       <PolishModal

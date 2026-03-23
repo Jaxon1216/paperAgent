@@ -37,6 +37,7 @@ import { countWords } from '@/utils/wordCount'
 import { usePaperStore } from '@/stores/paperStore'
 import { planStructure, planInstructions, streamGenerateAll, extractKeywords } from '@/services/aiApi'
 import { fetchTemplate } from '@/services/templateApi'
+import './OutlineSidebar.css'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -49,10 +50,10 @@ interface Props {
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  empty: <MinusCircleOutlined style={{ color: '#bfbfbf', fontSize: 14 }} />,
-  generating: <EditFilled style={{ color: '#faad14', fontSize: 14 }} />,
-  draft: <EditFilled style={{ color: '#1677ff', fontSize: 14 }} />,
-  confirmed: <CheckCircleFilled style={{ color: '#52c41a', fontSize: 14 }} />,
+  empty: <MinusCircleOutlined style={{ color: '#A8B5C2', fontSize: 14 }} />,
+  generating: <EditFilled style={{ color: '#C4944A', fontSize: 14 }} />,
+  draft: <EditFilled style={{ color: '#3A6EA5', fontSize: 14 }} />,
+  confirmed: <CheckCircleFilled style={{ color: '#4E9A6D', fontSize: 14 }} />,
 }
 
 export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPreviewPdf }: Props) {
@@ -263,32 +264,20 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
   }
 
   const getSectionIcon = (section: Section) => {
-    if (generatingSectionId === section.id) return <LoadingOutlined style={{ color: '#faad14', fontSize: 14 }} />
+    if (generatingSectionId === section.id) return <LoadingOutlined style={{ color: '#C4944A', fontSize: 14 }} />
     return STATUS_ICON[section.status] ?? STATUS_ICON.empty
   }
 
   return (
-    <div
-      style={{
-        width: 300,
-        borderRight: '1px solid #f0f0f0',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#fafafa',
-        flexShrink: 0,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: '10px 12px 6px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+    <div className="outline-sidebar">
+      <div className="outline-header">
         <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} />
-        <Text strong ellipsis style={{ flex: 1, fontSize: 14 }}>{paper.title}</Text>
+        <Text strong ellipsis className="outline-header__title">{paper.title}</Text>
         <Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={toggleLeft} />
       </div>
 
-      {/* 3-Step AI Actions */}
-      <div style={{ padding: '4px 12px 8px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 6 }}>
+      <div className="outline-actions">
+        <div className="outline-actions__row">
           <Tooltip title="AI 根据论文要求自动规划章节结构">
             <Button
               icon={<ProfileOutlined />}
@@ -323,18 +312,16 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
         )}
       </div>
 
-      {/* Scrollable content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {/* Word Count Stats */}
+      <div className="outline-content">
         {paper.sections.length > 0 && (
-          <div style={{ padding: '4px 12px 0', marginBottom: -2 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <div className="outline-wordcount">
+            <div className="outline-wordcount__row">
               <Text type="secondary" style={{ fontSize: 11 }}>
-                字数：<Text strong style={{ fontSize: 11 }}>{totalWords.toLocaleString()}</Text>
+                字数：<Text strong style={{ fontSize: 11 }} className="outline-wordcount__num">{totalWords.toLocaleString()}</Text>
                 {targetWords > 0 && <span> / {targetWords.toLocaleString()}</span>}
               </Text>
               {targetWords > 0 && (
-                <Text type="secondary" style={{ fontSize: 11 }}>{wordPercent}%</Text>
+                <Text type="secondary" style={{ fontSize: 11 }} className="outline-wordcount__num">{wordPercent}%</Text>
               )}
             </div>
             {targetWords > 0 && (
@@ -342,21 +329,20 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
                 percent={wordPercent}
                 size="small"
                 showInfo={false}
-                strokeColor={wordPercent >= 100 ? '#52c41a' : '#1677ff'}
+                strokeColor={wordPercent >= 100 ? { from: '#4E9A6D', to: '#3D8B5E' } : { from: '#5B9BD5', to: '#3A6EA5' }}
                 style={{ margin: 0 }}
               />
             )}
           </div>
         )}
 
-        {/* Section List */}
-        <div style={{ padding: '0 0 4px' }}>
-          <div style={{ padding: '4px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>章节</Text>
+        <div className="outline-sections">
+          <div className="outline-sections__header">
+            <Text type="secondary" className="outline-sections__label" style={{ fontSize: 12, fontWeight: 600 }}>章节</Text>
             <Text type="secondary" style={{ fontSize: 11 }}>{paper.sections.length} 个</Text>
           </div>
           {paper.sections.length === 0 && (
-            <div style={{ padding: '8px 12px' }}>
+            <div className="outline-sections__empty">
               <Text type="secondary" style={{ fontSize: 12 }}>暂无章节，点击「① 章节规划」或手动添加</Text>
             </div>
           )}
@@ -371,45 +357,21 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
                 onDragLeave={() => setDragOverId(null)}
                 onDrop={() => handleDrop(section)}
                 onClick={() => onSelect(section.id)}
-                style={{
-                  padding: '6px 12px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background:
-                    generatingSectionId === section.id
-                      ? '#fff7e6'
-                      : section.id === activeSectionId
-                        ? '#e6f4ff'
-                        : 'transparent',
-                  borderLeft:
-                    section.id === activeSectionId
-                      ? '3px solid #1677ff'
-                      : '3px solid transparent',
-                  borderTop:
-                    dragOverId === section.id
-                      ? '2px solid #1677ff'
-                      : '2px solid transparent',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (section.id !== activeSectionId && generatingSectionId !== section.id)
-                    e.currentTarget.style.background = '#f0f0f0'
-                }}
-                onMouseLeave={(e) => {
-                  if (section.id !== activeSectionId && generatingSectionId !== section.id)
-                    e.currentTarget.style.background = 'transparent'
-                }}
+                className={[
+                  'outline-section-item',
+                  section.id === activeSectionId && 'outline-section-item--active',
+                  generatingSectionId === section.id && 'outline-section-item--generating',
+                  dragOverId === section.id && 'outline-section-item--dragover',
+                ].filter(Boolean).join(' ')}
               >
                 {getSectionIcon(section)}
-                <Text ellipsis style={{ flex: 1, fontSize: 13 }}>{section.title}</Text>
+                <Text ellipsis className="outline-section-item__title">{section.title}</Text>
                 {wc > 0 && (
-                  <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>{wc.toLocaleString()}</Text>
+                  <Text type="secondary" className="outline-section-item__wordcount">{wc.toLocaleString()}</Text>
                 )}
                 {section.ai_instruction && (
                   <Tooltip title="已有写作指令">
-                    <BulbOutlined style={{ color: '#faad14', fontSize: 11 }} />
+                    <BulbOutlined style={{ color: '#C4944A', fontSize: 11 }} />
                   </Tooltip>
                 )}
                 {!isBusy && (
@@ -422,16 +384,14 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
                   >
                     <DeleteOutlined
                       onClick={(e) => e.stopPropagation()}
-                      style={{ color: '#bfbfbf', fontSize: 12 }}
-                      onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#ff4d4f' }}
-                      onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#bfbfbf' }}
+                      className="outline-section-item__delete"
                     />
                   </Popconfirm>
                 )}
               </div>
             )
           })}
-          <div style={{ padding: '6px 12px', display: 'flex', gap: 4 }}>
+          <div className="outline-section-add">
             <Input
               size="small"
               placeholder="新章节名称"
@@ -439,28 +399,28 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
               onChange={(e) => setNewSectionTitle(e.target.value)}
               onPressEnter={handleAddSection}
               style={{ flex: 1, fontSize: 12 }}
+              variant="borderless"
             />
-            <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={handleAddSection} disabled={!newSectionTitle.trim()} />
+            <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddSection} disabled={!newSectionTitle.trim()} />
           </div>
         </div>
 
-        {/* Collapsible panels */}
         <Collapse
           ghost
           size="small"
           defaultActiveKey={[]}
-          style={{ padding: '0 4px' }}
+          className="outline-collapse"
           items={[
             {
               key: 'refs',
               label: (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                  <Text style={{ fontSize: 12, fontWeight: 600 }}>参考文献</Text>
+                  <Text className="outline-panel-label">参考文献</Text>
                   <Text type="secondary" style={{ fontSize: 11 }}>{paper.references.length} 条</Text>
                 </div>
               ),
               children: (
-                <div style={{ padding: '0 4px' }}>
+                <div className="outline-panel-content">
                   <Space size={4} style={{ marginBottom: 8 }}>
                     <a href="https://www.cnki.net/" target="_blank" rel="noreferrer">
                       <Button size="small" type="link" icon={<LinkOutlined />} style={{ padding: '0 4px', fontSize: 11 }}>知网</Button>
@@ -497,9 +457,9 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
             },
             {
               key: 'keywords',
-              label: <Text style={{ fontSize: 12, fontWeight: 600 }}>AI 关键词建议</Text>,
+              label: <Text className="outline-panel-label">AI 关键词建议</Text>,
               children: (
-                <div style={{ padding: '0 4px' }}>
+                <div className="outline-panel-content">
                   {refKeywords ? (
                     <>
                       <Input.TextArea
@@ -549,9 +509,9 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
             },
             {
               key: 'requirements',
-              label: <Text style={{ fontSize: 12, fontWeight: 600 }}>论文要求</Text>,
+              label: <Text className="outline-panel-label">论文要求</Text>,
               children: (
-                <div style={{ padding: '0 4px' }}>
+                <div className="outline-panel-content">
                   <TextArea
                     defaultValue={paper.requirements}
                     onChange={(e) => handleRequirementsChange(e.target.value)}
@@ -564,9 +524,9 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
             },
             ...(coverFields.length > 0 ? [{
               key: 'cover',
-              label: <Text style={{ fontSize: 12, fontWeight: 600 }}>封面信息</Text>,
+              label: <Text className="outline-panel-label">封面信息</Text>,
               children: (
-                <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+                <div className="outline-panel-content" style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
                   {coverFields.map((field) => (
                     <div key={field.key}>
                       <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>{field.label}</Text>
@@ -599,8 +559,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
         />
       </div>
 
-      {/* Bottom actions */}
-      <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+      <div className="outline-footer">
         {!allConfirmed && hasContent && (
           <Button
             type="primary"
@@ -614,7 +573,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
             全部确认
           </Button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="outline-footer__heading-row">
           <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>标题编号</Text>
           <Select
             size="small"
@@ -631,7 +590,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
           />
         </div>
         <Tooltip title={!allConfirmed ? '请先确认所有章节后再导出 PDF' : ''}>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className="outline-footer__pdf-row">
             <Button icon={<FilePdfOutlined />} block size="small" onClick={onPreviewPdf} disabled={!allConfirmed}>
               预览 PDF
             </Button>
