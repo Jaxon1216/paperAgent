@@ -19,6 +19,7 @@ interface PaperStore {
   patchSection: (sectionId: string, data: Partial<Pick<Section, 'title' | 'content_md' | 'ai_instruction'>>) => Promise<void>
   setSectionStatus: (sectionId: string, status: Section['status']) => Promise<void>
   reorderSection: (sectionId: string, newOrder: number) => Promise<void>
+  updateSectionLocal: (sectionId: string, data: Partial<Pick<Section, 'content_md' | 'status'>>) => void
 
   addReference: (paperId: string, content: string) => Promise<void>
   patchReference: (refId: string, content: string) => Promise<void>
@@ -100,6 +101,19 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
     const updated = await apiUpdateSectionStatus(sectionId, status)
     const paper = get().currentPaper
     if (paper) set({ currentPaper: replaceSection(paper, updated) })
+  },
+
+  updateSectionLocal: (sectionId, data) => {
+    const paper = get().currentPaper
+    if (!paper) return
+    set({
+      currentPaper: {
+        ...paper,
+        sections: paper.sections.map((s) =>
+          s.id === sectionId ? { ...s, ...data } : s
+        ),
+      },
+    })
   },
 
   reorderSection: async (sectionId, newOrder) => {

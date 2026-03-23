@@ -58,7 +58,7 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPreviewPdf }: Props) {
   const navigate = useNavigate()
   const { toggleLeft, rightCollapsed, toggleRight } = useUiStore()
-  const { addSection, removeSection, reorderSection, loadPaper, updateMeta, setSectionStatus, addReference, patchReference, removeReference } = usePaperStore()
+  const { addSection, removeSection, reorderSection, loadPaper, updateMeta, setSectionStatus, updateSectionLocal, addReference, patchReference, removeReference } = usePaperStore()
 
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [planningStructure, setPlanningStructure] = useState(false)
@@ -167,20 +167,35 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
     [reorderSection, loadPaper, paper.id],
   )
 
+  const streamContentRef = useRef<Record<string, string>>({})
+
   const handleGenerateAll = async () => {
     if (!paper.sections.length) {
       message.warning('请先添加章节')
       return
     }
     setGeneratingAll(true)
+    streamContentRef.current = {}
     const { stream, abort } = streamGenerateAll(paper.id)
     abortRef.current = abort
 
     try {
       for await (const event of stream) {
         if (event.type === 'section_start') {
-          setGeneratingSectionId(event.data.section_id as string)
+          const sid = event.data.section_id as string
+          setGeneratingSectionId(sid)
+          onSelect(sid)
+          streamContentRef.current[sid] = ''
+          updateSectionLocal(sid, { content_md: '', status: 'generating' })
+        } else if (event.type === 'chunk') {
+          const sid = event.data.section_id as string
+          const chunk = (event.data.content as string) || ''
+          streamContentRef.current[sid] = (streamContentRef.current[sid] || '') + chunk
+          updateSectionLocal(sid, { content_md: streamContentRef.current[sid] })
         } else if (event.type === 'section_done') {
+          const sid = event.data.section_id as string
+          const content = (event.data.content as string) || streamContentRef.current[sid] || ''
+          updateSectionLocal(sid, { content_md: content, status: 'draft' })
           setGeneratingSectionId(null)
         } else if (event.type === 'keywords') {
           const kw = (event.data.keywords as string) || ''
@@ -199,6 +214,7 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
       setGeneratingAll(false)
       setGeneratingSectionId(null)
       abortRef.current = null
+      streamContentRef.current = {}
       await loadPaper(paper.id)
     }
   }

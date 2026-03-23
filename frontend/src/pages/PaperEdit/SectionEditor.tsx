@@ -63,6 +63,15 @@ export default function SectionEditor({ section }: Props) {
     }
   }, [section?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync content from store during external generation (generate-all flow)
+  useEffect(() => {
+    if (!section) return
+    if (section.status === 'generating' && !generating && !polishing) {
+      setLocalContent(section.content_md || '')
+      contentRef.current = section.content_md || ''
+    }
+  }, [section?.content_md, section?.status, generating, polishing]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
