@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import BASE_DIR, PAPERS_DIR
+from app.config import PAPERS_DIR
 from app.models.paper import Paper
 from app.models.section import Section
 from app.templates.template_registry import get_template_by_id
@@ -17,6 +17,9 @@ from app.templates.template_registry import get_template_by_id
 logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
+
+
+_INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$)")
 
 
 def _sanitize_markdown(md: str) -> str:
@@ -31,10 +34,14 @@ def _sanitize_markdown(md: str) -> str:
     if in_code_block:
         result.append("```")
 
-    text = "\n".join(result)
-    # Fix unclosed inline math (odd number of single $)
-    # Only fix if there's an odd count of non-escaped $
-    return text
+    for i, line in enumerate(result):
+        if line.strip().startswith("```"):
+            continue
+        dollar_count = len(_INLINE_MATH_RE.findall(line))
+        if dollar_count % 2 != 0:
+            result[i] = line + "$"
+
+    return "\n".join(result)
 
 
 _CITE_RE = re.compile(r"(?<!!)\[(\d+(?:[,，\-–]\s*\d+)*)\](?!\()")

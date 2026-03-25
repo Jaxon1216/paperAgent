@@ -3,7 +3,7 @@ export interface SSEEvent {
   data: Record<string, unknown>
 }
 
-const SSE_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
+const API_ORIGIN = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 async function* parseSSE(response: Response): AsyncGenerator<SSEEvent> {
   const reader = response.body?.getReader()
@@ -47,7 +47,7 @@ function sseRequest(
   body?: Record<string, unknown>,
 ): { stream: AsyncGenerator<SSEEvent>; abort: () => void } {
   const controller = new AbortController()
-  const url = `${SSE_BASE}${path}`
+  const url = `${API_ORIGIN}${path}`
 
   const fetchPromise = fetch(url, {
     method: 'POST',
@@ -79,8 +79,7 @@ export async function planStructure(
 ): Promise<{
   sections: Array<{ id: string; title: string; order: number; status: string }>
 }> {
-  const base = import.meta.env.DEV ? 'http://localhost:8000' : ''
-  const res = await fetch(`${base}/api/papers/${paperId}/plan-structure`, {
+  const res = await fetch(`${API_ORIGIN}/api/papers/${paperId}/plan-structure`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   })
@@ -96,8 +95,7 @@ export async function planInstructions(
 ): Promise<{
   sections: Array<{ id: string; title: string; ai_instruction: string; status: string }>
 }> {
-  const base = import.meta.env.DEV ? 'http://localhost:8000' : ''
-  const res = await fetch(`${base}/api/papers/${paperId}/plan-instructions`, {
+  const res = await fetch(`${API_ORIGIN}/api/papers/${paperId}/plan-instructions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   })
@@ -128,8 +126,7 @@ export function streamGenerateAll(paperId: string) {
 }
 
 export async function extractKeywords(paperId: string): Promise<{ keywords: string }> {
-  const base = import.meta.env.DEV ? 'http://localhost:8000' : ''
-  const res = await fetch(`${base}/api/papers/${paperId}/extract-keywords`, {
+  const res = await fetch(`${API_ORIGIN}/api/papers/${paperId}/extract-keywords`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   })

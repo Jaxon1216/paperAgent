@@ -12,7 +12,6 @@ const { Text } = Typography
 
 interface Props {
   paper: Paper
-  activeSectionId: string | null
   previewTrigger?: number
 }
 
@@ -21,6 +20,13 @@ export default function RightPanel({ paper, previewTrigger }: Props) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const prevTrigger = useRef(previewTrigger ?? 0)
+  const pdfUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (previewTrigger && previewTrigger > prevTrigger.current) {
@@ -40,8 +46,10 @@ export default function RightPanel({ paper, previewTrigger }: Props) {
         throw new Error(err.detail || '编译失败')
       }
       const blob = await response.blob()
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl)
-      setPdfUrl(URL.createObjectURL(blob))
+      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current)
+      const newUrl = URL.createObjectURL(blob)
+      pdfUrlRef.current = newUrl
+      setPdfUrl(newUrl)
     } catch (e: unknown) {
       message.error((e as Error).message || 'PDF 预览失败')
     } finally {

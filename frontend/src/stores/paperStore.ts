@@ -52,18 +52,25 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
     try {
       const papers = await fetchPapers()
       set({ papers })
+    } catch (e) {
+      console.error('Failed to load papers:', e)
+      set({ papers: [] })
     } finally {
       set({ loading: false })
     }
   },
 
   loadPaper: async (id: string) => {
-    set({ loading: true })
+    const isRefresh = get().currentPaper?.id === id
+    if (!isRefresh) set({ loading: true })
     try {
       const paper = await fetchPaper(id)
       set({ currentPaper: paper })
+    } catch (e) {
+      console.error('Failed to load paper:', e)
+      if (!isRefresh) set({ currentPaper: null })
     } finally {
-      set({ loading: false })
+      if (!isRefresh) set({ loading: false })
     }
   },
 

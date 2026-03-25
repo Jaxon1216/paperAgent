@@ -64,7 +64,7 @@ export interface PaperListItem {
   title: string
   template_id: string
   target_words: number
-  status: string
+  status: 'drafting' | 'completed'
   section_count: number
   created_at?: string
   updated_at?: string

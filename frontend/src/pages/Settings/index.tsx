@@ -50,8 +50,9 @@ export default function Settings() {
       setSaving(true)
       await api.put('/settings', values)
       message.success('设置已保存')
-    } catch {
-      // validation errors handled by form
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) return
+      message.error('保存失败，请检查后端是否运行')
     } finally {
       setSaving(false)
     }

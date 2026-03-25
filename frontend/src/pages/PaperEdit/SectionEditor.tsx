@@ -85,7 +85,7 @@ export default function SectionEditor({ section }: Props) {
 
   useEffect(() => {
     if (!searchTerm || !searchVisible) {
-      setMatchPositions([])
+      setMatchPositions((prev) => (prev.length === 0 ? prev : []))
       setMatchIndex(0)
       return
     }

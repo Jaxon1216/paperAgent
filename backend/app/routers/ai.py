@@ -151,6 +151,8 @@ async def generate_section(section_id: str, db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(select(Paper).where(Paper.id == section.paper_id))
     paper = result.scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
 
     all_sections_result = await db.execute(
         select(Section).where(Section.paper_id == paper.id).order_by(Section.order)
@@ -403,7 +405,12 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
 
                 section.status = "generating"
                 section.updated_at = datetime.now(timezone.utc)
-                await db.commit()
+                try:
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    logger.warning("Failed to update section %s status (may have been deleted)", section.id)
+                    continue
 
                 instruction = section.ai_instruction or f"撰写「{section.title}」章节"
                 target_words = paper.target_words // max(1, len(all_sections))
@@ -446,7 +453,11 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
                 section.content_md = cleaned
                 section.status = "draft"
                 section.updated_at = datetime.now(timezone.utc)
-                await db.commit()
+                try:
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    logger.warning("Failed to commit section %s (may have been deleted)", section.id)
                 generated_contents[section.title] = cleaned
 
                 yield _sse("section_done", {

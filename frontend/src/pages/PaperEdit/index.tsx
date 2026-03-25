@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Button, Spin } from 'antd'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Button, Result, Spin } from 'antd'
 import { MenuUnfoldOutlined } from '@ant-design/icons'
 import { usePaperStore } from '@/stores/paperStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -10,6 +10,7 @@ import RightPanel from './RightPanel'
 
 export default function PaperEdit() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { currentPaper, loading, loadPaper } = usePaperStore()
   const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useUiStore()
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
@@ -19,16 +20,26 @@ export default function PaperEdit() {
     if (id) loadPaper(id)
   }, [id, loadPaper])
 
+  const firstSectionId = currentPaper?.sections?.[0]?.id
   useEffect(() => {
-    if (currentPaper?.sections.length && !activeSectionId) {
-      setActiveSectionId(currentPaper.sections[0].id)
+    if (firstSectionId && !activeSectionId) {
+      setActiveSectionId(firstSectionId)
     }
-  }, [currentPaper, activeSectionId])
+  }, [firstSectionId, activeSectionId])
 
   if (loading || !currentPaper) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Spin size="large" />
+        {!loading && !currentPaper ? (
+          <Result
+            status="error"
+            title="加载失败"
+            subTitle="论文不存在或网络异常，请返回重试"
+            extra={<Button type="primary" onClick={() => navigate('/')}>返回首页</Button>}
+          />
+        ) : (
+          <Spin size="large" />
+        )}
       </div>
     )
   }
@@ -60,7 +71,6 @@ export default function PaperEdit() {
       {!rightCollapsed && (
         <RightPanel
           paper={currentPaper}
-          activeSectionId={activeSectionId}
           previewTrigger={pdfPreviewTrigger}
         />
       )}
