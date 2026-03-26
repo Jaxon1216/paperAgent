@@ -211,10 +211,16 @@ async def stream_chat(messages: list[dict], db: AsyncSession) -> AsyncGenerator[
         kwargs["api_base"] = settings["base_url"]
 
     response = await litellm.acompletion(**kwargs)
-    async for chunk in response:
-        delta = chunk.choices[0].delta
-        if delta and delta.content:
-            yield delta.content
+    try:
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+    finally:
+        if hasattr(response, "close"):
+            await response.close()
+        elif hasattr(response, "response") and hasattr(response.response, "close"):
+            await response.response.close()
 
 
 def build_system_message(language: str = "zh") -> dict:

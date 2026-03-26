@@ -391,56 +391,57 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
 
     async def event_stream():
         generated_contents: dict[str, str] = {}
+        failed_sections: list[str] = []
 
-        try:
-            for section in gen_order:
-                if section.status in ("confirmed", "draft") and section.content_md:
-                    generated_contents[section.title] = section.content_md or ""
-                    continue
+        for section in gen_order:
+            if section.status in ("confirmed", "draft") and section.content_md:
+                generated_contents[section.title] = section.content_md or ""
+                continue
 
-                yield _sse("section_start", {
-                    "section_id": section.id,
-                    "title": section.title,
-                })
+            yield _sse("section_start", {
+                "section_id": section.id,
+                "title": section.title,
+            })
 
-                section.status = "generating"
-                section.updated_at = datetime.now(timezone.utc)
-                try:
-                    await db.commit()
-                except Exception:
-                    await db.rollback()
-                    logger.warning("Failed to update section %s status (may have been deleted)", section.id)
-                    continue
+            section.status = "generating"
+            section.updated_at = datetime.now(timezone.utc)
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Failed to update section %s status (may have been deleted)", section.id)
+                continue
 
-                instruction = section.ai_instruction or f"撰写「{section.title}」章节"
-                target_words = paper.target_words // max(1, len(all_sections))
+            instruction = section.ai_instruction or f"撰写「{section.title}」章节"
+            target_words = paper.target_words // max(1, len(all_sections))
 
-                if is_abstract(section.title) and generated_contents:
-                    summary = "\n\n".join(
-                        _compress_section(t, c, 300)
-                        for t, c in generated_contents.items() if c
-                    )
-                    messages = build_section_messages(
-                        title=section.title,
-                        instruction=instruction,
-                        target_words=target_words,
-                        full_paper_summary=summary,
-                        references=ref_list,
-                    )
-                else:
-                    prev_content = None
-                    idx_in_body = body_sections.index(section) if section in body_sections else -1
-                    if idx_in_body > 0:
-                        prev_title = body_sections[idx_in_body - 1].title
-                        prev_content = generated_contents.get(prev_title)
-                    messages = build_section_messages(
-                        title=section.title,
-                        instruction=instruction,
-                        target_words=target_words,
-                        prev_content=prev_content,
-                        references=ref_list,
-                    )
+            if is_abstract(section.title) and generated_contents:
+                summary = "\n\n".join(
+                    _compress_section(t, c, 300)
+                    for t, c in generated_contents.items() if c
+                )
+                messages = build_section_messages(
+                    title=section.title,
+                    instruction=instruction,
+                    target_words=target_words,
+                    full_paper_summary=summary,
+                    references=ref_list,
+                )
+            else:
+                prev_content = None
+                idx_in_body = body_sections.index(section) if section in body_sections else -1
+                if idx_in_body > 0:
+                    prev_title = body_sections[idx_in_body - 1].title
+                    prev_content = generated_contents.get(prev_title)
+                messages = build_section_messages(
+                    title=section.title,
+                    instruction=instruction,
+                    target_words=target_words,
+                    prev_content=prev_content,
+                    references=ref_list,
+                )
 
+            try:
                 full_content = ""
                 async for chunk in stream_chat(messages, db):
                     full_content += chunk
@@ -464,38 +465,59 @@ async def generate_all(paper_id: str, db: AsyncSession = Depends(get_db)):
                     "section_id": section.id,
                     "content": cleaned,
                 })
-
-            # Post-generation: extract reference keywords
-            if generated_contents:
-                yield _sse("keywords_start", {"message": "正在提取参考文献关键词..."})
-                compressed = "\n\n".join(
-                    _compress_section(t, c, 200)
-                    for t, c in generated_contents.items() if c
-                )
+            except Exception as section_err:
+                logger.warning("Section '%s' generation failed: %s", section.title, section_err)
+                failed_sections.append(section.title)
+                if full_content.strip():
+                    cleaned = _clean_ai_content(full_content, section.title)
+                    section.content_md = cleaned
+                    section.status = "draft"
+                else:
+                    section.status = "empty"
+                section.updated_at = datetime.now(timezone.utc)
                 try:
-                    kw_messages = build_keyword_messages(
-                        title=paper.title,
-                        requirements=paper.requirements or "",
-                        compressed_content=compressed,
-                    )
-                    keywords_text = await chat(kw_messages, db)
-
-                    meta = dict(paper.metadata_fields or {})
-                    meta["_ai_reference_keywords"] = keywords_text
-                    paper.metadata_fields = meta
-                    paper.updated_at = datetime.now(timezone.utc)
                     await db.commit()
+                except Exception:
+                    await db.rollback()
+                yield _sse("section_error", {
+                    "section_id": section.id,
+                    "title": section.title,
+                    "message": str(section_err),
+                })
 
-                    yield _sse("keywords", {"keywords": keywords_text})
-                except Exception as kw_err:
-                    logger.warning("Keyword extraction failed: %s", kw_err)
-                    yield _sse("keywords", {"keywords": ""})
+        if generated_contents:
+            yield _sse("keywords_start", {"message": "正在提取参考文献关键词..."})
+            compressed = "\n\n".join(
+                _compress_section(t, c, 200)
+                for t, c in generated_contents.items() if c
+            )
+            try:
+                kw_messages = build_keyword_messages(
+                    title=paper.title,
+                    requirements=paper.requirements or "",
+                    compressed_content=compressed,
+                )
+                keywords_text = await chat(kw_messages, db)
 
+                meta = dict(paper.metadata_fields or {})
+                meta["_ai_reference_keywords"] = keywords_text
+                paper.metadata_fields = meta
+                paper.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+
+                yield _sse("keywords", {"keywords": keywords_text})
+            except Exception as kw_err:
+                logger.warning("Keyword extraction failed: %s", kw_err)
+                yield _sse("keywords", {"keywords": ""})
+
+        if failed_sections:
+            yield _sse("done", {
+                "message": f"部分章节生成失败：{', '.join(failed_sections)}",
+                "partial": True,
+                "failed": failed_sections,
+            })
+        else:
             yield _sse("done", {"message": "All sections generated"})
-
-        except Exception as e:
-            logger.exception("Generate-all failed")
-            yield _sse("error", {"message": str(e)})
 
     return _sse_response(event_stream())
 

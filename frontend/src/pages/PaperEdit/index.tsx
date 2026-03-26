@@ -11,7 +11,9 @@ import RightPanel from './RightPanel'
 export default function PaperEdit() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { currentPaper, loading, loadPaper } = usePaperStore()
+  const currentPaper = usePaperStore((s) => s.currentPaper)
+  const loading = usePaperStore((s) => s.loading)
+  const loadPaper = usePaperStore((s) => s.loadPaper)
   const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useUiStore()
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const [pdfPreviewTrigger, setPdfPreviewTrigger] = useState(0)

@@ -30,7 +30,10 @@ const TEMPLATE_NAMES: Record<string, string> = {
 
 export default function Home() {
   const navigate = useNavigate()
-  const { papers, loading, loadPapers, removePaper } = usePaperStore()
+  const papers = usePaperStore((s) => s.papers)
+  const loading = usePaperStore((s) => s.loading)
+  const loadPapers = usePaperStore((s) => s.loadPapers)
+  const removePaper = usePaperStore((s) => s.removePaper)
 
   useEffect(() => {
     loadPapers()

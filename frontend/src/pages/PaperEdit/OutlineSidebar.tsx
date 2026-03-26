@@ -15,6 +15,7 @@ import {
   ArrowLeftOutlined,
   BulbOutlined,
   CheckCircleFilled,
+  ClearOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -59,7 +60,17 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPreviewPdf }: Props) {
   const navigate = useNavigate()
   const { toggleLeft, rightCollapsed, toggleRight } = useUiStore()
-  const { addSection, removeSection, reorderSection, loadPaper, updateMeta, setSectionStatus, updateSectionLocal, addReference, patchReference, removeReference } = usePaperStore()
+  const addSection = usePaperStore((s) => s.addSection)
+  const removeSection = usePaperStore((s) => s.removeSection)
+  const reorderSection = usePaperStore((s) => s.reorderSection)
+  const loadPaper = usePaperStore((s) => s.loadPaper)
+  const updateMeta = usePaperStore((s) => s.updateMeta)
+  const setSectionStatus = usePaperStore((s) => s.setSectionStatus)
+  const updateSectionLocal = usePaperStore((s) => s.updateSectionLocal)
+  const addReference = usePaperStore((s) => s.addReference)
+  const patchReference = usePaperStore((s) => s.patchReference)
+  const removeReference = usePaperStore((s) => s.removeReference)
+  const clearAllSectionsContent = usePaperStore((s) => s.clearAllSectionsContent)
 
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [planningStructure, setPlanningStructure] = useState(false)
@@ -172,21 +183,41 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
   )
 
   const streamContentRef = useRef<Record<string, string>>({})
+  const generatingLockRef = useRef(false)
+  const chunkFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingChunkSid = useRef<string | null>(null)
+
+  const flushChunk = useCallback(() => {
+    const sid = pendingChunkSid.current
+    if (sid && streamContentRef.current[sid] != null) {
+      updateSectionLocal(sid, { content_md: streamContentRef.current[sid] })
+    }
+    pendingChunkSid.current = null
+    chunkFlushTimer.current = null
+  }, [updateSectionLocal])
 
   const handleGenerateAll = async () => {
+    if (generatingLockRef.current) return
     if (!paper.sections.length) {
       message.warning('请先添加章节')
       return
     }
+    generatingLockRef.current = true
     setGeneratingAll(true)
     streamContentRef.current = {}
     const { stream, abort } = streamGenerateAll(paper.id)
     abortRef.current = abort
+    let completedSections = 0
+    let receivedError = false
 
     try {
       for await (const event of stream) {
         if (event.type === 'section_start') {
           const sid = event.data.section_id as string
+          if (chunkFlushTimer.current) {
+            clearTimeout(chunkFlushTimer.current)
+            flushChunk()
+          }
           setGeneratingSectionId(sid)
           onSelect(sid)
           streamContentRef.current[sid] = ''
@@ -195,31 +226,65 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
           const sid = event.data.section_id as string
           const chunk = (event.data.content as string) || ''
           streamContentRef.current[sid] = (streamContentRef.current[sid] || '') + chunk
-          updateSectionLocal(sid, { content_md: streamContentRef.current[sid] })
+          pendingChunkSid.current = sid
+          if (!chunkFlushTimer.current) {
+            chunkFlushTimer.current = setTimeout(flushChunk, 150)
+          }
         } else if (event.type === 'section_done') {
+          if (chunkFlushTimer.current) {
+            clearTimeout(chunkFlushTimer.current)
+            chunkFlushTimer.current = null
+          }
+          pendingChunkSid.current = null
           const sid = event.data.section_id as string
           const content = (event.data.content as string) || streamContentRef.current[sid] || ''
           updateSectionLocal(sid, { content_md: content, status: 'draft' })
           setGeneratingSectionId(null)
+          completedSections++
         } else if (event.type === 'keywords') {
           const kw = (event.data.keywords as string) || ''
           if (kw) setRefKeywords(kw)
         } else if (event.type === 'keywords_start') {
           message.info('正在提取参考文献关键词...')
+        } else if (event.type === 'section_error') {
+          receivedError = true
+          const title = (event.data.title as string) || '未知章节'
+          message.warning(`「${title}」生成失败，已跳过，可稍后重试`)
+          setGeneratingSectionId(null)
         } else if (event.type === 'error') {
-          message.error((event.data.message as string) || 'AI 生成失败')
+          receivedError = true
+          message.error((event.data.message as string) || 'AI 生成出错')
         } else if (event.type === 'done') {
-          message.success('所有章节生成完成')
+          if (event.data.partial) {
+            const failed = (event.data.failed as string[]) || []
+            message.warning(`生成完成，但以下章节失败：${failed.join('、')}，可点击「继续生成」重试`)
+          } else {
+            message.success('所有章节生成完成')
+          }
         }
       }
     } catch (e: unknown) {
-      if ((e as Error).name !== 'AbortError') message.error('AI 生成失败')
+      const err = e as Error
+      if (err.name !== 'AbortError') {
+        console.error('[generate-all] SSE stream error:', err.name, err.message, err)
+        if (completedSections > 0) {
+          message.warning(`连接中断，已成功生成 ${completedSections} 个章节，可点击「继续生成」完成剩余部分`)
+        } else if (!receivedError) {
+          message.error(`生成失败：${err.message || '未知错误'}`)
+        }
+      }
     } finally {
+      if (chunkFlushTimer.current) {
+        clearTimeout(chunkFlushTimer.current)
+        chunkFlushTimer.current = null
+      }
+      pendingChunkSid.current = null
       setGeneratingAll(false)
       setGeneratingSectionId(null)
       abortRef.current = null
       streamContentRef.current = {}
       await loadPaper(paper.id)
+      generatingLockRef.current = false
     }
   }
 
@@ -560,18 +625,44 @@ export default function OutlineSidebar({ paper, activeSectionId, onSelect, onPre
       </div>
 
       <div className="outline-footer">
-        {!allConfirmed && hasContent && (
-          <Button
-            type="primary"
-            ghost
-            icon={<CheckCircleFilled />}
-            size="small"
-            block
-            onClick={handleConfirmAll}
-            disabled={isBusy}
-          >
-            全部确认
-          </Button>
+        {hasContent && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {!allConfirmed && (
+              <Button
+                type="primary"
+                ghost
+                icon={<CheckCircleFilled />}
+                size="small"
+                block
+                onClick={handleConfirmAll}
+                disabled={isBusy}
+              >
+                全部确认
+              </Button>
+            )}
+            <Popconfirm
+              title="清空所有章节内容？"
+              description="仅清空正文内容，章节标题和 AI 写作指令保留。"
+              onConfirm={async () => {
+                await clearAllSectionsContent()
+                message.success('所有章节内容已清空')
+              }}
+              okText="清空"
+              okType="danger"
+              cancelText="取消"
+            >
+              <Button
+                icon={<ClearOutlined />}
+                size="small"
+                block
+                danger
+                type="text"
+                disabled={isBusy}
+              >
+                清空所有内容
+              </Button>
+            </Popconfirm>
+          </div>
         )}
         <div className="outline-footer__heading-row">
           <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>标题编号</Text>

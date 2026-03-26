@@ -36,7 +36,7 @@ export default function PolishModal({ open, loading, onCancel, onExecute }: Prop
       okText="开始润色"
       cancelText="取消"
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <div>

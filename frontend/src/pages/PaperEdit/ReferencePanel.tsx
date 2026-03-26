@@ -11,7 +11,9 @@ interface Props {
 }
 
 export default function ReferencePanel({ paper }: Props) {
-  const { addReference, patchReference, removeReference } = usePaperStore()
+  const addReference = usePaperStore((s) => s.addReference)
+  const patchReference = usePaperStore((s) => s.patchReference)
+  const removeReference = usePaperStore((s) => s.removeReference)
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const handleAdd = async () => {

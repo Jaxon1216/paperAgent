@@ -25,6 +25,9 @@ interface PaperStore {
   patchReference: (refId: string, content: string) => Promise<void>
   removeReference: (refId: string) => Promise<void>
 
+  clearSectionContent: (sectionId: string) => Promise<void>
+  clearAllSectionsContent: () => Promise<void>
+
   updateMeta: (paperId: string, data: Partial<Pick<Paper, 'title' | 'target_words' | 'metadata_fields' | 'requirements'>>) => Promise<void>
 }
 
@@ -153,6 +156,26 @@ export const usePaperStore = create<PaperStore>((set, get) => ({
     if (paper) {
       set({ currentPaper: { ...paper, references: paper.references.filter((r) => r.id !== refId) } })
     }
+  },
+
+  clearSectionContent: async (sectionId) => {
+    const updated = await apiUpdateSection(sectionId, { content_md: '', status: 'empty' })
+    const paper = get().currentPaper
+    if (paper) set({ currentPaper: replaceSection(paper, updated) })
+  },
+
+  clearAllSectionsContent: async () => {
+    const paper = get().currentPaper
+    if (!paper) return
+    const toUpdate = paper.sections.filter((s) => s.content_md?.trim())
+    const results = await Promise.all(
+      toUpdate.map((s) => apiUpdateSection(s.id, { content_md: '', status: 'empty' }))
+    )
+    let updated = paper
+    for (const section of results) {
+      updated = replaceSection(updated, section)
+    }
+    set({ currentPaper: updated })
   },
 
   updateMeta: async (paperId, data) => {

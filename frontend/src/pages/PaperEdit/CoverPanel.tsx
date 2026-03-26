@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function CoverPanel({ paper }: Props) {
-  const { updateMeta } = usePaperStore()
+  const updateMeta = usePaperStore((s) => s.updateMeta)
   const [template, setTemplate] = useState<Template | null>(null)
   const [form] = Form.useForm()
 

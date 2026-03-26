@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Input, Space, Tag, Typography, message } from 'antd'
 import {
   CheckOutlined,
+  ClearOutlined,
   CloseOutlined,
   DownOutlined,
   EditOutlined,
@@ -35,7 +36,9 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
 }
 
 export default function SectionEditor({ section }: Props) {
-  const { patchSection, setSectionStatus } = usePaperStore()
+  const patchSection = usePaperStore((s) => s.patchSection)
+  const setSectionStatus = usePaperStore((s) => s.setSectionStatus)
+  const clearSectionContent = usePaperStore((s) => s.clearSectionContent)
   const [localContent, setLocalContent] = useState('')
   const [generating, setGenerating] = useState(false)
   const [polishOpen, setPolishOpen] = useState(false)
@@ -53,6 +56,10 @@ export default function SectionEditor({ section }: Props) {
   const contentRef = useRef('')
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const prevExternalGenRef = useRef(false)
+
+  const externalGenerating = !!(section && section.status === 'generating' && !generating && !polishing)
+  const displayContent = externalGenerating ? (section?.content_md || '') : localContent
 
   useEffect(() => {
     if (section) {
@@ -64,16 +71,13 @@ export default function SectionEditor({ section }: Props) {
     }
   }, [section?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync content from store during external generation (generate-all flow)
   useEffect(() => {
-    if (!section) return
-    if (section.status !== 'generating' || generating || polishing) return
-    const incoming = section.content_md || ''
-    if (contentRef.current !== incoming) {
-      contentRef.current = incoming
-      setLocalContent(incoming)
+    if (prevExternalGenRef.current && !externalGenerating && section) {
+      contentRef.current = section.content_md || ''
+      setLocalContent(section.content_md || '')
     }
-  }, [section?.content_md, section?.status, generating, polishing]) // eslint-disable-line react-hooks/exhaustive-deps
+    prevExternalGenRef.current = externalGenerating
+  }, [externalGenerating]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {
@@ -84,12 +88,13 @@ export default function SectionEditor({ section }: Props) {
   }, [])
 
   useEffect(() => {
+    if (externalGenerating) return
     if (!searchTerm || !searchVisible) {
       setMatchPositions((prev) => (prev.length === 0 ? prev : []))
-      setMatchIndex(0)
+      setMatchIndex((prev) => (prev === 0 ? prev : 0))
       return
     }
-    const lower = localContent.toLowerCase()
+    const lower = displayContent.toLowerCase()
     const needle = searchTerm.toLowerCase()
     const positions: number[] = []
     let idx = 0
@@ -101,7 +106,7 @@ export default function SectionEditor({ section }: Props) {
     }
     setMatchPositions(positions)
     setMatchIndex(0)
-  }, [searchTerm, localContent, searchVisible])
+  }, [searchTerm, displayContent, searchVisible, externalGenerating])
 
   const selectMatchInTextarea = useCallback((pos: number, len: number) => {
     const container = editorContainerRef.current
@@ -110,10 +115,10 @@ export default function SectionEditor({ section }: Props) {
     if (!ta) return
     ta.focus()
     ta.setSelectionRange(pos, pos + len)
-    const linesBefore = localContent.slice(0, pos).split('\n').length
+    const linesBefore = displayContent.slice(0, pos).split('\n').length
     const lineHeight = 22
     ta.scrollTop = Math.max(0, (linesBefore - 3) * lineHeight)
-  }, [localContent])
+  }, [displayContent])
 
   const handleSearchNext = useCallback(() => {
     if (matchPositions.length === 0) return
@@ -186,6 +191,7 @@ export default function SectionEditor({ section }: Props) {
   }
 
   const handleChange = (value: string | undefined) => {
+    if (externalGenerating) return
     const v = value ?? ''
     setLocalContent(v)
     contentRef.current = v
@@ -218,6 +224,15 @@ export default function SectionEditor({ section }: Props) {
     }
     setGenerating(false)
     setPolishing(false)
+  }
+
+  const handleClearContent = async () => {
+    if (!section) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    await clearSectionContent(section.id)
+    setLocalContent('')
+    contentRef.current = ''
+    message.success('章节内容已清空')
   }
 
   const handleGenerate = async () => {
@@ -332,14 +347,23 @@ export default function SectionEditor({ section }: Props) {
                 onClick={handleGenerate}
                 disabled={isLocked}
               >
-                AI 生成
+                AI 生成该章节
               </Button>
               <Button
                 icon={<EditOutlined />}
                 onClick={() => setPolishOpen(true)}
                 disabled={isLocked || !section.content_md}
               >
-                AI 润色
+                AI 润色该章节
+              </Button>
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClearContent}
+                disabled={isLocked || !localContent.trim()}
+                danger
+                type="text"
+              >
+                清空
               </Button>
             </>
           )}
@@ -461,7 +485,7 @@ export default function SectionEditor({ section }: Props) {
 
       <div style={{ flex: 1, overflow: 'auto' }} data-color-mode="light">
         <MDEditor
-          value={localContent}
+          value={displayContent}
           onChange={handleChange}
           height="100%"
           preview={isLocked ? 'preview' : 'live'}
@@ -484,7 +508,7 @@ export default function SectionEditor({ section }: Props) {
           userSelect: 'none',
         }}
       >
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{countWords(localContent).toLocaleString()} 字</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{countWords(displayContent).toLocaleString()} 字</span>
         <span>{isLocked ? '已锁定' : isBusy ? '生成中...' : '编辑中'}</span>
       </div>
 
